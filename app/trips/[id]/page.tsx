@@ -20,14 +20,12 @@ import {
   MoreVertical,
   ChevronRight,
   Check,
-  Receipt,
   Settings,
   X,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Trip {
   id: string
@@ -147,6 +145,7 @@ export default function TripPage() {
 
   const fetchExpenses = async () => {
     try {
+      console.log("Fetching expenses for trip:", tripId)
       const response = await fetch(`/api/trips/${tripId}/expenses`)
 
       if (!response.ok) {
@@ -161,6 +160,7 @@ export default function TripPage() {
       }
 
       const data = await response.json()
+      console.log("Fetched expenses:", data)
       setExpenses(data)
     } catch (error) {
       console.error("Ошибка при загрузке расходов:", error)
@@ -342,20 +342,166 @@ export default function TripPage() {
     }
   }
 
+  // В функции getPayerText() заменить на:
   const getPayerText = () => {
     const payerNames = Object.keys(selectedPayers)
-    if (payerNames.length === 0) return "выберите плательщика"
-    if (payerNames.length === 1) return payerNames[0]
-    return `${payerNames[0]} и еще ${payerNames.length - 1}`
+    if (payerNames.length === 0) return "Выберите участника"
+    return null // Будем показывать бейджи вместо текста
   }
 
+  // В функции getSplitText() заменить на:
   const getSplitText = () => {
     const shareCount = Object.keys(selectedShares).length
-    if (shareCount === 0) return "выберите участников"
-    if (splitMethod === "equally") return "поровну"
-    if (splitMethod === "exact") return "точные суммы"
-    if (splitMethod === "percentages") return "проценты"
-    return "доли"
+    if (shareCount === 0) return "На всех"
+
+    // Для всех методов кроме equally возвращаем текстовое описание
+    if (splitMethod === "exact") return "Точные суммы"
+    if (splitMethod === "percentages") return "Проценты"
+
+    // Для equally проверяем выбраны ли все участники
+    if (splitMethod === "equally") {
+      const participantCount = Object.keys(splitParticipants).filter((p) => splitParticipants[p]).length
+      if (participantCount === 0) return "Выберите участников"
+
+      // Если выбраны все участники - показываем "НА ВСЕХ"
+      if (trip && participantCount === trip.participants.length) {
+        return "На всех"
+      }
+
+      // Если выбраны не все - показываем бейджи (возвращаем null)
+      return null
+    }
+
+    return "Доли"
+  }
+
+  // Добавить функцию для обрезки имен:
+  const truncateName = (name: string) => {
+    if (name.length <= 7) return name
+    return name.substring(0, 6) + "..."
+  }
+
+  // Добавить функцию для определения иконки после функции truncateName():
+
+  // Функция для определения иконки на основе описания
+  const getExpenseIcon = (description: string) => {
+    const desc = description.toLowerCase().trim()
+
+    // Транспорт
+    if (
+      desc.includes("такси") ||
+      desc.includes("taxi") ||
+      desc.includes("трансфер") ||
+      desc.includes("убер") ||
+      desc.includes("uber") ||
+      desc.includes("яндекс") ||
+      desc.includes("автобус") ||
+      desc.includes("метро") ||
+      desc.includes("поезд")
+    ) {
+      return { icon: "🚗", color: "bg-blue-100", iconColor: "text-blue-600" }
+    }
+
+    // Еда и рестораны
+    if (
+      desc.includes("ресторан") ||
+      desc.includes("еда") ||
+      desc.includes("мак") ||
+      desc.includes("макдак") ||
+      desc.includes("макдоналдс") ||
+      desc.includes("старбакс") ||
+      desc.includes("кофе") ||
+      desc.includes("магаз") ||
+      desc.includes("супермаркет") ||
+      desc.includes("доставка") ||
+      desc.includes("пицца") ||
+      desc.includes("бургер") ||
+      desc.includes("кафе") ||
+      desc.includes("обед") ||
+      desc.includes("ужин") ||
+      desc.includes("завтрак") ||
+      desc.includes("продукты") ||
+      desc.includes("grocery")
+    ) {
+      return { icon: "🍽️", color: "bg-orange-100", iconColor: "text-orange-600" }
+    }
+
+    // Бензин и заправка
+    if (
+      desc.includes("бензин") ||
+      desc.includes("бенз") ||
+      desc.includes("заправка") ||
+      desc.includes("топливо") ||
+      desc.includes("газ") ||
+      desc.includes("fuel") ||
+      desc.includes("gas")
+    ) {
+      return { icon: "⛽", color: "bg-green-100", iconColor: "text-green-600" }
+    }
+
+    // Деньги и финансы
+    if (
+      desc.includes("доллар") ||
+      desc.includes("dollar") ||
+      desc.includes("деньги") ||
+      desc.includes("money") ||
+      desc.includes("банк") ||
+      desc.includes("bank") ||
+      desc.includes("обмен") ||
+      desc.includes("валют")
+    ) {
+      return { icon: "💵", color: "bg-green-800", iconColor: "text-green-100" }
+    }
+
+    // Авиабилеты и транспорт
+    if (
+      desc.includes("билет") ||
+      desc.includes("самолет") ||
+      desc.includes("авиа") ||
+      desc.includes("flight") ||
+      desc.includes("plane") ||
+      desc.includes("airport") ||
+      desc.includes("аэропорт") ||
+      desc.includes("перелет")
+    ) {
+      return { icon: "✈️", color: "bg-sky-100", iconColor: "text-sky-600" }
+    }
+
+    // Кемпинг и отдых
+    if (
+      desc.includes("парк") ||
+      desc.includes("пропуск") ||
+      desc.includes("кемпинг") ||
+      desc.includes("палатк") ||
+      desc.includes("camping") ||
+      desc.includes("tent") ||
+      desc.includes("отдых") ||
+      desc.includes("природа") ||
+      desc.includes("поход")
+    ) {
+      return { icon: "🏕️", color: "bg-emerald-100", iconColor: "text-emerald-600" }
+    }
+
+    // По умолчанию - счет с голубым фоном
+    return { icon: "📄", color: "bg-blue-100", iconColor: "text-blue-700" }
+  }
+
+  // Добавить функции для проверки активности полей после функции truncateName():
+  // Функции для проверки активности полей
+  const isDescriptionValid = () => {
+    return expenseDescription.trim().length > 0
+  }
+
+  const isAmountValid = () => {
+    return isDescriptionValid() && expenseAmount.trim().length > 0 && Number.parseFloat(expenseAmount) > 0
+  }
+
+  const isPayerSelected = () => {
+    return isAmountValid() && Object.keys(selectedPayers).length > 0
+  }
+
+  const isSplitEnabled = () => {
+    return isPayerSelected()
   }
 
   const canSave = () => {
@@ -375,10 +521,13 @@ export default function TripPage() {
     if (trip) {
       const sharePerPerson = amount / trip.participants.length
       const shares: { [key: string]: number } = {}
+      const splitAll: { [key: string]: boolean } = {}
       trip.participants.forEach((p) => {
         shares[p] = sharePerPerson
+        splitAll[p] = true
       })
       setSelectedShares(shares)
+      setSplitParticipants(splitAll)
     }
 
     setCurrentStep("main")
@@ -414,7 +563,7 @@ export default function TripPage() {
   }
 
   const openSplitOptions = () => {
-    // Initialize split participants if not set
+    // Initialize split participants if not set - по умолчанию все выбраны
     if (Object.keys(splitParticipants).length === 0 && trip) {
       const initialSplit: { [key: string]: boolean } = {}
       trip.participants.forEach((p) => {
@@ -609,25 +758,45 @@ export default function TripPage() {
   }
 
   const confirmDeleteExpense = (expenseId: string) => {
+    console.log("Confirming delete for expense:", expenseId)
     setExpenseToDelete(expenseId)
     setIsDeleteExpenseConfirmOpen(true)
   }
 
   const deleteExpense = async () => {
-    if (!expenseToDelete) return
+    if (!expenseToDelete) {
+      console.log("No expense to delete")
+      return
+    }
 
     try {
+      console.log("Deleting expense:", expenseToDelete)
       const response = await fetch(`/api/trips/${tripId}/expenses/${expenseToDelete}`, {
         method: "DELETE",
       })
 
+      console.log("Delete response status:", response.status)
+      console.log("Delete response ok:", response.ok)
+
       if (response.ok) {
+        const result = await response.json()
+        console.log("Delete result:", result)
+
+        // Закрываем диалог
         setIsDeleteExpenseConfirmOpen(false)
         setExpenseToDelete(null)
-        fetchExpenses()
+
+        // Принудительно обновляем расходы
+        console.log("Fetching expenses after delete...")
+        await fetchExpenses()
+      } else {
+        const errorData = await response.json()
+        console.error("Delete failed:", errorData)
+        alert("Ошибка при удалении расхода: " + (errorData.error || "Неизвестная ошибка"))
       }
     } catch (error) {
       console.error("Ошибка при удалении расхода:", error)
+      alert("Ошибка при удалении расхода: " + error.message)
     }
   }
 
@@ -661,6 +830,26 @@ export default function TripPage() {
       ...prev,
       [participant]: checked,
     }))
+  }
+
+  // Функция для правильной сортировки расходов (новые сверху)
+  const getSortedExpenses = () => {
+    return [...expenses].sort((a, b) => {
+      // Сначала сортируем по дате (новые сверху)
+      const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime()
+      if (dateComparison !== 0) return dateComparison
+
+      // Если даты одинаковые, сортируем по id как числам (новые id больше)
+      const aId = Number.parseInt(a.id, 10)
+      const bId = Number.parseInt(b.id, 10)
+
+      // Если ID не числовые, используем строковое сравнение
+      if (isNaN(aId) || isNaN(bId)) {
+        return b.id.localeCompare(a.id)
+      }
+
+      return bId - aId
+    })
   }
 
   if (!trip) {
@@ -748,82 +937,123 @@ export default function TripPage() {
                         {/* Description field */}
                         <div className="space-y-4">
                           <div className="flex items-center space-x-4">
-                            <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center">
-                              <Receipt className="w-6 h-6 text-pink-600" />
+                            <div
+                              className={`w-12 h-12 rounded-xl flex items-center justify-center ${getExpenseIcon(expenseDescription).color}`}
+                            >
+                              <span className={`text-2xl ${getExpenseIcon(expenseDescription).iconColor}`}>
+                                {getExpenseIcon(expenseDescription).icon}
+                              </span>
                             </div>
                             <Input
                               value={expenseDescription}
                               onChange={(e) => setExpenseDescription(e.target.value)}
                               placeholder="Описание"
-                              className="flex-1 border-0 border-b-2 border-gray-200 rounded-none px-0 focus:border-gray-400 text-lg"
+                              className="flex-1 border-none outline-none ring-0 focus:border-none focus:outline-none focus:ring-0 border-b-2 border-gray-200 focus:border-b-2 focus:border-gray-200 rounded-none px-0 text-lg bg-transparent"
                             />
                           </div>
 
-                          {/* Amount field */}
-                          <div className="flex items-center space-x-4">
-                            <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
-                              <span className="text-xl font-bold text-gray-700">$</span>
+                          {/* Payer and split options */}
+                          <div className="space-y-6 pt-4">
+                            {/* Amount field */}
+                            <div className="space-y-2">
+                              <span
+                                className={`font-medium ${isDescriptionValid() ? "text-gray-600" : "text-gray-400"}`}
+                              >
+                                Сумма
+                              </span>
+                              <div className="flex items-center space-x-4">
+                                <div
+                                  className={`w-12 h-12 rounded-xl flex items-center justify-center ${isDescriptionValid() ? "bg-green-800" : "bg-gray-50"}`}
+                                >
+                                  <span
+                                    className={`text-xl font-bold ${isDescriptionValid() ? "text-white" : "text-gray-400"}`}
+                                  >
+                                    $
+                                  </span>
+                                </div>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={expenseAmount}
+                                  onChange={(e) => setExpenseAmount(e.target.value)}
+                                  placeholder="0"
+                                  disabled={!isDescriptionValid()}
+                                  className={`flex-1 border-none outline-none ring-0 focus:border-none focus:outline-none focus:ring-0 border-b-2 rounded-none px-0 text-2xl font-medium bg-transparent ${
+                                    isDescriptionValid()
+                                      ? "border-gray-200 focus:border-b-2 focus:border-gray-200 text-gray-900"
+                                      : "border-gray-100 focus:border-b-2 focus:border-gray-100 text-gray-400 cursor-not-allowed"
+                                  }`}
+                                />
+                              </div>
                             </div>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={expenseAmount}
-                              onChange={(e) => setExpenseAmount(e.target.value)}
-                              placeholder="0"
-                              className="flex-1 border-0 border-b-2 border-gray-200 rounded-none px-0 focus:border-gray-400 text-2xl font-medium"
-                            />
-                          </div>
-                        </div>
 
-                        {/* Payer and split options */}
-                        <div className="space-y-6 pt-4">
-                          {/* Payer selection */}
-                          <div className="flex items-center space-x-3">
-                            <span className="text-gray-600 font-medium">Оплатил</span>
-                            <Select
-                              value={Object.keys(selectedPayers)[0] || ""}
-                              onValueChange={(value) => {
-                                if (value === "multiple") {
-                                  goToMultiplePayers()
-                                } else {
-                                  selectSinglePayer(value)
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="w-auto min-w-[200px] text-gray-900 border-gray-200 hover:bg-gray-50">
-                                <SelectValue placeholder="выберите плательщика" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {trip.participants.map((participant) => (
-                                  <SelectItem key={participant} value={participant}>
-                                    <div className="flex items-center space-x-3">
-                                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                                        {participant.charAt(0)}
-                                      </div>
-                                      <span>{participant}</span>
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                                <SelectItem value="multiple">
-                                  <div className="flex items-center justify-between w-full">
-                                    <span className="font-medium">Несколько человек</span>
-                                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                            {/* Payer selection */}
+                            <div className="space-y-2">
+                              <span className={`font-medium ${isAmountValid() ? "text-gray-600" : "text-gray-400"}`}>
+                                Оплатил
+                              </span>
+                              <div
+                                onClick={isAmountValid() ? () => setCurrentStep("choose-payer") : undefined}
+                                className={`w-full p-3 border rounded-md text-left min-h-[48px] flex items-center ${
+                                  isAmountValid()
+                                    ? "border-gray-300 bg-white cursor-pointer hover:border-gray-400 transition-colors"
+                                    : "border-gray-200 bg-gray-50 cursor-not-allowed"
+                                }`}
+                              >
+                                {Object.keys(selectedPayers).length === 0 ? (
+                                  <span className="text-gray-400">Выберите участника</span>
+                                ) : (
+                                  <div className="flex flex-wrap gap-2">
+                                    {Object.keys(selectedPayers).map((payer) => (
+                                      <span
+                                        key={payer}
+                                        className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded border"
+                                      >
+                                        {truncateName(payer)}
+                                      </span>
+                                    ))}
                                   </div>
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                                )}
+                              </div>
+                            </div>
 
-                          {/* Split selection */}
-                          <div className="flex items-center space-x-3">
-                            <span className="text-gray-600 font-medium">Разделить</span>
-                            <Button
-                              variant="outline"
-                              onClick={openSplitOptions}
-                              className="text-gray-900 border-gray-200 hover:bg-gray-50 font-medium"
-                            >
-                              поровну
-                            </Button>
+                            {/* Split selection */}
+                            <div className="space-y-2">
+                              <span className={`font-medium ${isSplitEnabled() ? "text-gray-600" : "text-gray-400"}`}>
+                                Разделить
+                              </span>
+                              <div
+                                onClick={isSplitEnabled() ? openSplitOptions : undefined}
+                                className={`w-full p-3 border rounded-md text-left min-h-[48px] flex items-center ${
+                                  isSplitEnabled()
+                                    ? "border-gray-300 bg-white cursor-pointer hover:border-gray-400 transition-colors"
+                                    : "border-gray-200 bg-gray-50 cursor-not-allowed"
+                                }`}
+                              >
+                                {Object.keys(selectedShares).length === 0 ? (
+                                  <span className="text-gray-400">На всех</span>
+                                ) : splitMethod === "equally" &&
+                                  Object.keys(splitParticipants).filter((p) => splitParticipants[p]).length > 0 &&
+                                  trip &&
+                                  Object.keys(splitParticipants).filter((p) => splitParticipants[p]).length <
+                                    trip.participants.length ? (
+                                  <div className="flex flex-wrap gap-2">
+                                    {Object.keys(splitParticipants)
+                                      .filter((p) => splitParticipants[p])
+                                      .map((participant) => (
+                                        <span
+                                          key={participant}
+                                          className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 text-sm font-medium rounded border"
+                                        >
+                                          {truncateName(participant)}
+                                        </span>
+                                      ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-900">{getSplitText()}</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -890,15 +1120,7 @@ export default function TripPage() {
                             Назад
                           </Button>
                           <DialogTitle>Ввести суммы</DialogTitle>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={donePaidAmounts}
-                            disabled={!canDonePaidAmounts()}
-                            className="text-green-600 disabled:text-gray-400"
-                          >
-                            Готово
-                          </Button>
+                          <div className="w-16"></div>
                         </div>
                       </DialogHeader>
                       <div className="p-4 space-y-4">
@@ -930,6 +1152,17 @@ export default function TripPage() {
                           </div>
                           <div className="text-sm text-gray-600">${getAmountLeft().toFixed(2)} осталось</div>
                         </div>
+                      </div>
+
+                      {/* Done button at bottom center */}
+                      <div className="p-6 pt-0">
+                        <Button
+                          onClick={donePaidAmounts}
+                          disabled={!canDonePaidAmounts()}
+                          className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400"
+                        >
+                          ГОТОВО
+                        </Button>
                       </div>
                     </>
                   )}
@@ -1151,11 +1384,18 @@ export default function TripPage() {
                   </CardContent>
                 </Card>
               ) : (
-                expenses.map((expense) => (
+                getSortedExpenses().map((expense) => (
                   <Card key={expense.id}>
                     <CardHeader className="pb-2">
                       <div className="flex justify-between items-start">
-                        <CardTitle className="text-base">{expense.description}</CardTitle>
+                        <div className="flex items-center space-x-3">
+                          <div
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center ${getExpenseIcon(expense.description).color}`}
+                          >
+                            <span className="text-lg">{getExpenseIcon(expense.description).icon}</span>
+                          </div>
+                          <CardTitle className="text-base">{expense.description}</CardTitle>
+                        </div>
                         <div className="flex items-center space-x-2">
                           <Badge variant="secondary">${expense.totalAmount.toFixed(2)}</Badge>
                           <Button
