@@ -215,6 +215,7 @@ export async function createExpense(
     totalAmount,
     payers,
     shares,
+    createdAt: new Date().toISOString(),
   }
 
   expenses.push(newExpense)

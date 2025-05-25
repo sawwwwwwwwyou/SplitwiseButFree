@@ -81,13 +81,27 @@ export default function HomePage() {
       return
     }
 
+    // Обработка дубликатов имен
+    const processedNames: string[] = []
+    const nameCounts: { [key: string]: number } = {}
+
+    participantNames.forEach((name) => {
+      if (nameCounts[name]) {
+        nameCounts[name]++
+        processedNames.push(`${name} (${nameCounts[name]})`)
+      } else {
+        nameCounts[name] = 1
+        processedNames.push(name)
+      }
+    })
+
     try {
       const response = await fetch("/api/trips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newTripName,
-          participants: participantNames,
+          participants: processedNames,
         }),
       })
 
@@ -168,13 +182,27 @@ export default function HomePage() {
       return
     }
 
+    // Обработка дубликатов имен
+    const processedNames: string[] = []
+    const nameCounts: { [key: string]: number } = {}
+
+    participantNames.forEach((name) => {
+      if (nameCounts[name]) {
+        nameCounts[name]++
+        processedNames.push(`${name} (${nameCounts[name]})`)
+      } else {
+        nameCounts[name] = 1
+        processedNames.push(name)
+      }
+    })
+
     try {
       const response = await fetch(`/api/trips/${editingTrip.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editTripName,
-          participants: participantNames,
+          participants: processedNames,
         }),
       })
 

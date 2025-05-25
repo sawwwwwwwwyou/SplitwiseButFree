@@ -27,6 +27,7 @@ interface Expense {
   totalAmount: number
   payers: { [participant: string]: number }
   shares: { [participant: string]: number }
+  createdAt?: string
 }
 
 interface Settlement {
@@ -236,13 +237,27 @@ export default function TripPage() {
       return
     }
 
+    // Обработка дубликатов имен
+    const processedNames: string[] = []
+    const nameCounts: { [key: string]: number } = {}
+
+    participantNames.forEach((name) => {
+      if (nameCounts[name]) {
+        nameCounts[name]++
+        processedNames.push(`${name} (${nameCounts[name]})`)
+      } else {
+        nameCounts[name] = 1
+        processedNames.push(name)
+      }
+    })
+
     try {
       const response = await fetch(`/api/trips/${tripId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editTripName,
-          participants: participantNames,
+          participants: processedNames,
         }),
       })
 
@@ -264,10 +279,23 @@ export default function TripPage() {
     if (!newParticipantName.trim()) return
 
     try {
+      // Проверяем существующие имена
+      let finalName = newParticipantName.trim()
+      if (trip) {
+        const nameCounts = trip.participants.filter((p) => {
+          const baseName = p.replace(/ $$\d+$$$/, "") // Убираем существующую нумерацию
+          return baseName === finalName
+        }).length
+
+        if (nameCounts > 0) {
+          finalName = `${finalName} (${nameCounts + 1})`
+        }
+      }
+
       const response = await fetch(`/api/trips/${tripId}/participants`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newParticipantName }),
+        body: JSON.stringify({ name: finalName }),
       })
 
       if (response.ok) {
@@ -1313,12 +1341,19 @@ export default function TripPage() {
               ) : (
                 [...expenses]
                   .sort((a, b) => {
-                    // Сначала сортируем по дате (новые сверху)
+                    // Если есть createdAt, используем его для точной сортировки
+                    if (a.createdAt && b.createdAt) {
+                      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                    }
+
+                    // Иначе сортируем по дате
                     const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime()
                     if (dateComparison !== 0) return dateComparison
 
-                    // Если даты одинаковые, сортируем по id (предполагая, что новые id больше)
-                    return b.id.localeCompare(a.id)
+                    // Если даты одинаковые и нет createdAt, сортируем по id
+                    const idA = Number.parseInt(a.id, 10)
+                    const idB = Number.parseInt(b.id, 10)
+                    return idB - idA
                   })
                   .map((expense) => (
                     <Card key={expense.id}>

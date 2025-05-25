@@ -12,4 +12,5 @@ export interface Expense {
   totalAmount: number
   payers: { [participant: string]: number }
   shares: { [participant: string]: number }
+  createdAt?: string
 }
