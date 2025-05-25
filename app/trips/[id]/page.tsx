@@ -9,21 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  ArrowLeft,
-  Plus,
-  Users,
-  DollarSign,
-  Calculator,
-  Edit,
-  Trash2,
-  MoreVertical,
-  ChevronRight,
-  Check,
-  Settings,
-  X,
-} from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ArrowLeft, Plus, Users, DollarSign, Calculator, Edit, Trash2, ChevronRight, Check, X } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 
@@ -145,7 +131,6 @@ export default function TripPage() {
 
   const fetchExpenses = async () => {
     try {
-      console.log("Fetching expenses for trip:", tripId)
       const response = await fetch(`/api/trips/${tripId}/expenses`)
 
       if (!response.ok) {
@@ -160,7 +145,6 @@ export default function TripPage() {
       }
 
       const data = await response.json()
-      console.log("Fetched expenses:", data)
       setExpenses(data)
     } catch (error) {
       console.error("Ошибка при загрузке расходов:", error)
@@ -758,45 +742,25 @@ export default function TripPage() {
   }
 
   const confirmDeleteExpense = (expenseId: string) => {
-    console.log("Confirming delete for expense:", expenseId)
     setExpenseToDelete(expenseId)
     setIsDeleteExpenseConfirmOpen(true)
   }
 
   const deleteExpense = async () => {
-    if (!expenseToDelete) {
-      console.log("No expense to delete")
-      return
-    }
+    if (!expenseToDelete) return
 
     try {
-      console.log("Deleting expense:", expenseToDelete)
       const response = await fetch(`/api/trips/${tripId}/expenses/${expenseToDelete}`, {
         method: "DELETE",
       })
 
-      console.log("Delete response status:", response.status)
-      console.log("Delete response ok:", response.ok)
-
       if (response.ok) {
-        const result = await response.json()
-        console.log("Delete result:", result)
-
-        // Закрываем диалог
         setIsDeleteExpenseConfirmOpen(false)
         setExpenseToDelete(null)
-
-        // Принудительно обновляем расходы
-        console.log("Fetching expenses after delete...")
-        await fetchExpenses()
-      } else {
-        const errorData = await response.json()
-        console.error("Delete failed:", errorData)
-        alert("Ошибка при удалении расхода: " + (errorData.error || "Неизвестная ошибка"))
+        fetchExpenses()
       }
     } catch (error) {
       console.error("Ошибка при удалении расхода:", error)
-      alert("Ошибка при удалении расхода: " + error.message)
     }
   }
 
@@ -832,26 +796,6 @@ export default function TripPage() {
     }))
   }
 
-  // Функция для правильной сортировки расходов (новые сверху)
-  const getSortedExpenses = () => {
-    return [...expenses].sort((a, b) => {
-      // Сначала сортируем по дате (новые сверху)
-      const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime()
-      if (dateComparison !== 0) return dateComparison
-
-      // Если даты одинаковые, сортируем по id как числам (новые id больше)
-      const aId = Number.parseInt(a.id, 10)
-      const bId = Number.parseInt(b.id, 10)
-
-      // Если ID не числовые, используем строковое сравнение
-      if (isNaN(aId) || isNaN(bId)) {
-        return b.id.localeCompare(a.id)
-      }
-
-      return bId - aId
-    })
-  }
-
   if (!trip) {
     return (
       <div className="min-h-screen bg-gray-50 p-4">
@@ -884,23 +828,6 @@ export default function TripPage() {
             </Button>
           </Link>
           <h1 className="text-xl font-bold text-gray-900 flex-1">{trip.name}</h1>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <MoreVertical className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={openEditTrip}>
-                <Settings className="w-4 h-4 mr-2" />
-                Редактировать поездку
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={confirmDeleteTrip} className="text-red-600">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Удалить поездку
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
 
         <Tabs defaultValue="expenses" className="w-full">
@@ -920,15 +847,15 @@ export default function TripPage() {
                     Добавить
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="w-[90vw] max-w-md h-[90vh] p-0">
+                <DialogContent className="w-[90vw] max-w-md h-[90vh] p-0 flex flex-col overflow-hidden">
                   {currentStep === "main" && (
                     <>
-                      <DialogHeader className="p-4 pb-0">
+                      <DialogHeader className="p-4 pb-0 flex-shrink-0">
                         <div className="flex items-center justify-center">
                           <DialogTitle>Добавить расход</DialogTitle>
                         </div>
                       </DialogHeader>
-                      <div className="p-6 space-y-8 flex-1">
+                      <div className="p-6 space-y-8 flex-1 overflow-y-auto">
                         {/* Trip name centered */}
                         <div className="text-center">
                           <h3 className="text-lg font-medium text-gray-900">{trip.name}</h3>
@@ -1059,7 +986,7 @@ export default function TripPage() {
                       </div>
 
                       {/* Save button at bottom center */}
-                      <div className="p-6 pt-0">
+                      <div className="p-6 pt-0 flex-shrink-0">
                         <Button
                           onClick={saveExpense}
                           disabled={!canSave()}
@@ -1073,7 +1000,7 @@ export default function TripPage() {
 
                   {currentStep === "choose-payer" && (
                     <>
-                      <DialogHeader className="p-4 pb-0">
+                      <DialogHeader className="p-4 pb-0 flex-shrink-0">
                         <div className="flex items-center justify-between">
                           <Button variant="ghost" size="sm" onClick={() => setCurrentStep("main")}>
                             Назад
@@ -1082,7 +1009,7 @@ export default function TripPage() {
                           <div className="w-16"></div>
                         </div>
                       </DialogHeader>
-                      <div className="p-4 space-y-4">
+                      <div className="p-4 space-y-4 flex-1 overflow-y-auto">
                         {trip.participants.map((participant) => (
                           <div
                             key={participant}
@@ -1114,7 +1041,7 @@ export default function TripPage() {
 
                   {currentStep === "paid-amounts" && (
                     <>
-                      <DialogHeader className="p-4 pb-0">
+                      <DialogHeader className="p-4 pb-0 flex-shrink-0">
                         <div className="flex items-center justify-between">
                           <Button variant="ghost" size="sm" onClick={() => setCurrentStep("choose-payer")}>
                             Назад
@@ -1123,7 +1050,7 @@ export default function TripPage() {
                           <div className="w-16"></div>
                         </div>
                       </DialogHeader>
-                      <div className="p-4 space-y-4">
+                      <div className="p-4 space-y-4 flex-1 overflow-y-auto">
                         {trip.participants.map((participant) => (
                           <div key={participant} className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
@@ -1155,7 +1082,7 @@ export default function TripPage() {
                       </div>
 
                       {/* Done button at bottom center */}
-                      <div className="p-6 pt-0">
+                      <div className="p-6 pt-0 flex-shrink-0">
                         <Button
                           onClick={donePaidAmounts}
                           disabled={!canDonePaidAmounts()}
@@ -1169,7 +1096,7 @@ export default function TripPage() {
 
                   {currentStep === "split-options" && (
                     <>
-                      <DialogHeader className="p-4 pb-0">
+                      <DialogHeader className="p-4 pb-0 flex-shrink-0">
                         <div className="flex items-center justify-between">
                           <Button variant="ghost" size="sm" onClick={() => setCurrentStep("main")}>
                             Назад
@@ -1178,7 +1105,7 @@ export default function TripPage() {
                           <div className="w-16"></div>
                         </div>
                       </DialogHeader>
-                      <div className="p-4 space-y-6 flex-1">
+                      <div className="p-4 space-y-6 flex-1 overflow-y-auto">
                         {/* Split method icons */}
                         <div className="flex justify-center space-x-4">
                           <div className="text-center">
@@ -1360,7 +1287,7 @@ export default function TripPage() {
                       </div>
 
                       {/* Done button at bottom center */}
-                      <div className="p-6 pt-0">
+                      <div className="p-6 pt-0 flex-shrink-0">
                         <Button
                           onClick={applySplitOptions}
                           disabled={!canApplySplitOptions()}
@@ -1384,53 +1311,64 @@ export default function TripPage() {
                   </CardContent>
                 </Card>
               ) : (
-                getSortedExpenses().map((expense) => (
-                  <Card key={expense.id}>
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center space-x-3">
-                          <div
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center ${getExpenseIcon(expense.description).color}`}
-                          >
-                            <span className="text-lg">{getExpenseIcon(expense.description).icon}</span>
+                [...expenses]
+                  .sort((a, b) => {
+                    // Сначала сортируем по дате (новые сверху)
+                    const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime()
+                    if (dateComparison !== 0) return dateComparison
+
+                    // Если даты одинаковые, сортируем по id (предполагая, что новые id больше)
+                    return b.id.localeCompare(a.id)
+                  })
+                  .map((expense) => (
+                    <Card key={expense.id}>
+                      <CardHeader className="pb-2">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center space-x-3">
+                            <div
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center ${getExpenseIcon(expense.description).color}`}
+                            >
+                              <span className="text-lg">{getExpenseIcon(expense.description).icon}</span>
+                            </div>
+                            <CardTitle className="text-base">{expense.description}</CardTitle>
                           </div>
-                          <CardTitle className="text-base">{expense.description}</CardTitle>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="secondary">${expense.totalAmount.toFixed(2)}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditExpense(expense)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => confirmDeleteExpense(expense.id)}
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Badge variant="secondary">${expense.totalAmount.toFixed(2)}</Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditExpense(expense)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => confirmDeleteExpense(expense.id)}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-gray-600 mb-2">{new Date(expense.date).toLocaleDateString("ru-RU")}</p>
-                      <div className="text-xs text-gray-500">
-                        <p>
-                          Платили:{" "}
-                          {Object.entries(expense.payers)
-                            .map(([name, amount]) => `${name} $${amount.toFixed(2)}`)
-                            .join(", ")}
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600 mb-2">
+                          {new Date(expense.date).toLocaleDateString("ru-RU")}
                         </p>
-                        <p>Участвуют: {Object.keys(expense.shares).join(", ")}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                        <div className="text-xs text-gray-500">
+                          <p>
+                            Платили:{" "}
+                            {Object.entries(expense.payers)
+                              .map(([name, amount]) => `${name} $${amount.toFixed(2)}`)
+                              .join(", ")}
+                          </p>
+                          <p>Участвуют: {Object.keys(expense.shares).join(", ")}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
               )}
             </div>
           </TabsContent>

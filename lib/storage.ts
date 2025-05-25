@@ -272,39 +272,19 @@ export async function updateExpense(
 }
 
 export async function deleteExpense(tripId: string, expenseId: string): Promise<boolean> {
-  console.log("Storage deleteExpense called with:", { tripId, expenseId })
-
   const kv = await getKV()
   const expenses = await getExpenses(tripId)
-
-  console.log(
-    "Current expenses before delete:",
-    expenses.map((e) => ({ id: e.id, description: e.description })),
-  )
-
-  // ВАЖНО: Убедимся, что мы фильтруем правильно
-  const filteredExpenses = expenses.filter((expense) => {
-    const shouldKeep = expense.id !== expenseId
-    console.log(`Expense ${expense.id} (${expense.description}): ${shouldKeep ? "KEEP" : "DELETE"}`)
-    return shouldKeep
-  })
-
-  console.log(
-    "Filtered expenses after delete:",
-    filteredExpenses.map((e) => ({ id: e.id, description: e.description })),
-  )
+  const filteredExpenses = expenses.filter((expense) => expense.id !== expenseId)
 
   if (kv) {
     try {
       await kv.set(`expenses:${tripId}`, filteredExpenses)
-      console.log("Successfully saved to KV")
     } catch (error) {
       console.error("KV error, using local storage:", error)
       localExpenses[tripId] = filteredExpenses
     }
   } else {
     localExpenses[tripId] = filteredExpenses
-    console.log("Saved to local storage")
   }
 
   return true
