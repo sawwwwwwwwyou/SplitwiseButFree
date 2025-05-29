@@ -2,20 +2,23 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Users, Calendar, Trash2, X, Edit } from "lucide-react"
+import { Plus, Users, Calendar, Trash2, X, Edit, Lock } from "lucide-react" // Added Lock
 import Link from "next/link"
+import type { Participant as ParticipantType } from "@/lib/types"
+import { getUnlockedTrips } from "@/lib/pin-utils" // Import for checking unlocked trips
 
 interface Trip {
   id: string
   name: string
-  participants: string[]
+  participants: ParticipantType[]
   createdAt: string
+  pinHash?: string
 }
 
 interface Participant {
@@ -32,32 +35,34 @@ export default function HomePage() {
     { id: "2", name: "" },
   ])
 
-  // Delete confirmation state
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null)
 
-  // Add these state variables after the existing state declarations
   const [isEditTripOpen, setIsEditTripOpen] = useState(false)
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null)
   const [editTripName, setEditTripName] = useState("")
   const [editParticipants, setEditParticipants] = useState<Participant[]>([])
 
+  const [newTripPin, setNewTripPin] = useState("")
+  const [unlockedTripIds, setUnlockedTripIds] = useState<string[]>([])
+
   useEffect(() => {
     fetchTrips()
+    setUnlockedTripIds(getUnlockedTrips())
   }, [])
 
   const fetchTrips = async () => {
     try {
       const response = await fetch("/api/trips")
       const data = await response.json()
-      setTrips(data)
+      setTrips(data as Trip[])
     } catch (error) {
       console.error("Ошибка при загрузке поездок:", error)
     }
   }
 
   const addParticipant = () => {
-    const newId = (participants.length + 1).toString()
+    const newId = crypto.randomUUID() // Use crypto.randomUUID for unique IDs
     setParticipants([...participants, { id: newId, name: "" }])
   }
 
@@ -71,29 +76,19 @@ export default function HomePage() {
     setParticipants(participants.map((p) => (p.id === id ? { ...p, name } : p)))
   }
 
+  const isCreateTripDisabled = useMemo(() => {
+    const hasName = newTripName.trim().length > 0
+    const hasParticipants = participants.some((p) => p.name.trim().length > 0)
+    const isPinValid = newTripPin.trim().length === 0 || newTripPin.trim().length === 4
+    return !hasName || !hasParticipants || !isPinValid
+  }, [newTripName, participants, newTripPin])
+
   const createTrip = async () => {
-    if (!newTripName.trim()) return
+    if (isCreateTripDisabled) return // Already checked by button's disabled state
 
-    const participantNames = participants.map((p) => p.name.trim()).filter((name) => name.length > 0)
-
-    if (participantNames.length === 0) {
-      alert("Добавьте хотя бы одного участника")
-      return
-    }
-
-    // Обработка дубликатов имен
-    const processedNames: string[] = []
-    const nameCounts: { [key: string]: number } = {}
-
-    participantNames.forEach((name) => {
-      if (nameCounts[name]) {
-        nameCounts[name]++
-        processedNames.push(`${name} (${nameCounts[name]})`)
-      } else {
-        nameCounts[name] = 1
-        processedNames.push(name)
-      }
-    })
+    const participantObjects: ParticipantType[] = participants
+      .filter((p) => p.name.trim().length > 0)
+      .map((p) => ({ id: p.id, name: p.name.trim() }))
 
     try {
       const response = await fetch("/api/trips", {
@@ -101,26 +96,32 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newTripName,
-          participants: processedNames,
+          participants: participantObjects,
+          pin: newTripPin.trim() || undefined,
         }),
       })
 
       if (response.ok) {
         setNewTripName("")
+        setNewTripPin("")
         setParticipants([
           { id: "1", name: "" },
           { id: "2", name: "" },
         ])
         setIsCreateDialogOpen(false)
         fetchTrips()
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        alert(`Ошибка создания поездки: ${errorData.error || response.statusText}`)
       }
     } catch (error) {
       console.error("Ошибка при создании поездки:", error)
+      alert("Произошла ошибка при создании поездки.")
     }
   }
 
   const confirmDeleteTrip = (trip: Trip, event: React.MouseEvent) => {
-    event.preventDefault() // Prevent navigation
+    event.preventDefault()
     event.stopPropagation()
     setTripToDelete(trip)
     setIsDeleteConfirmOpen(true)
@@ -144,21 +145,20 @@ export default function HomePage() {
     }
   }
 
-  // Add this function after the existing functions
   const openEditTrip = (trip: Trip) => {
     setEditingTrip(trip)
     setEditTripName(trip.name)
     setEditParticipants(
-      trip.participants.map((name, index) => ({
-        id: index.toString(),
-        name,
+      trip.participants.map((p) => ({
+        id: p.id,
+        name: p.name,
       })),
     )
     setIsEditTripOpen(true)
   }
 
   const addEditParticipant = () => {
-    const newId = (editParticipants.length + 1).toString()
+    const newId = crypto.randomUUID()
     setEditParticipants([...editParticipants, { id: newId, name: "" }])
   }
 
@@ -175,26 +175,14 @@ export default function HomePage() {
   const saveEditTrip = async () => {
     if (!editTripName.trim() || !editingTrip) return
 
-    const participantNames = editParticipants.map((p) => p.name.trim()).filter((name) => name.length > 0)
+    const processedParticipants: ParticipantType[] = editParticipants
+      .map((p) => ({ id: p.id, name: p.name.trim() }))
+      .filter((p) => p.name.length > 0)
 
-    if (participantNames.length === 0) {
+    if (processedParticipants.length === 0) {
       alert("Добавьте хотя бы одного участника")
       return
     }
-
-    // Обработка дубликатов имен
-    const processedNames: string[] = []
-    const nameCounts: { [key: string]: number } = {}
-
-    participantNames.forEach((name) => {
-      if (nameCounts[name]) {
-        nameCounts[name]++
-        processedNames.push(`${name} (${nameCounts[name]})`)
-      } else {
-        nameCounts[name] = 1
-        processedNames.push(name)
-      }
-    })
 
     try {
       const response = await fetch(`/api/trips/${editingTrip.id}`, {
@@ -202,7 +190,7 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editTripName,
-          participants: processedNames,
+          participants: processedParticipants,
         }),
       })
 
@@ -210,9 +198,13 @@ export default function HomePage() {
         setIsEditTripOpen(false)
         setEditingTrip(null)
         fetchTrips()
+      } else {
+        const errorData = await response.json().catch(() => ({}))
+        alert(`Ошибка обновления: ${errorData.error || response.statusText}`)
       }
     } catch (error) {
       console.error("Ошибка при обновлении поездки:", error)
+      alert("Произошла ошибка при обновлении поездки.")
     }
   }
 
@@ -244,6 +236,30 @@ export default function HomePage() {
                     placeholder="Например: Отпуск в Сочи"
                     className="mt-2"
                   />
+                </div>
+
+                <div>
+                  <Label htmlFor="tripPin" className="text-base font-medium">
+                    PIN-код (опционально)
+                  </Label>
+                  <Input
+                    id="tripPin"
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    value={newTripPin}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "")
+                      setNewTripPin(value)
+                    }}
+                    placeholder="4 цифры для защиты поездки"
+                    className="mt-2"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Если указан, PIN-код будет запрашиваться при каждом доступе к поездке. Оставьте пустым, если PIN не
+                    нужен.
+                  </p>
                 </div>
 
                 <div>
@@ -282,7 +298,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="flex space-x-2 pt-4">
-                  <Button onClick={createTrip} className="flex-1">
+                  <Button onClick={createTrip} className="flex-1" disabled={isCreateTripDisabled}>
                     Создать поездку
                   </Button>
                   <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} className="flex-1">
@@ -304,63 +320,81 @@ export default function HomePage() {
               </CardContent>
             </Card>
           ) : (
-            trips.map((trip) => (
-              <div key={trip.id} className="relative">
-                <Link href={`/trips/${trip.id}`}>
-                  <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                    <CardContent className="p-4">
-                      {/* Header with title and edit button */}
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-1">{trip.name}</h3>
-                          <div className="flex items-center text-sm text-gray-600 mb-3">
-                            <Calendar className="w-4 h-4 mr-1" />
-                            {new Date(trip.createdAt).toLocaleDateString("ru-RU")}
+            trips.map((trip) => {
+              const isLocked = trip.pinHash && !unlockedTripIds.includes(trip.id)
+              return (
+                <div key={trip.id} className="relative">
+                  <Link href={`/trips/${trip.id}`}>
+                    <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center">
+                              {isLocked && <Lock className="w-4 h-4 mr-2 text-gray-500" />}
+                              <h3 className="text-lg font-semibold text-gray-900 mb-1">{trip.name}</h3>
+                            </div>
+                            <div className="flex items-center text-sm text-gray-600 mb-3">
+                              <Calendar className="w-4 h-4 mr-1" />
+                              {new Date(trip.createdAt).toLocaleDateString("ru-RU")}
+                            </div>
+                            <div className="flex items-center text-sm text-gray-600 mb-2">
+                              <Users className="w-4 h-4 mr-1" />
+                              {trip.participants.length}{" "}
+                              {trip.participants.length === 1
+                                ? "участник"
+                                : trip.participants.length > 1 && trip.participants.length < 5
+                                  ? "участника"
+                                  : "участников"}
+                            </div>
                           </div>
-                          {/* Participants count moved here */}
-                          <div className="flex items-center text-sm text-gray-600 mb-2">
-                            <Users className="w-4 h-4 mr-1" />
-                            {trip.participants.length} участников
-                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              if (!isLocked) openEditTrip(trip)
+                            }}
+                            disabled={isLocked}
+                            className="h-8 w-8 p-0 text-gray-600 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            openEditTrip(trip)
-                          }}
-                          className="h-8 w-8 p-0 text-gray-600 hover:text-gray-700 hover:bg-gray-100"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      </div>
 
-                      {/* Participants list and delete button */}
-                      <div className="flex items-end justify-between">
-                        <p className="text-sm text-gray-900 font-bold">
-                          {trip.participants.slice(0, 3).join(", ")}
-                          {trip.participants.length > 3 && ` и еще ${trip.participants.length - 3}`}
-                        </p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => confirmDeleteTrip(trip, e)}
-                          className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              </div>
-            ))
+                        <div className="flex items-end justify-between">
+                          <p className="text-sm text-gray-900 font-bold">
+                            {trip.participants
+                              .slice(0, 3)
+                              .map((p) => p.name)
+                              .join(", ")}
+                            {trip.participants.length > 3 && ` и еще ${trip.participants.length - 3}`}
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              if (!isLocked) confirmDeleteTrip(trip, e)
+                              else {
+                                e.preventDefault()
+                                e.stopPropagation()
+                              }
+                            }}
+                            disabled={isLocked}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                </div>
+              )
+            })
           )}
         </div>
 
-        {/* Edit Trip Dialog */}
         <Dialog open={isEditTripOpen} onOpenChange={setIsEditTripOpen}>
           <DialogContent className="w-[90vw] max-w-md max-h-[80vh] overflow-y-auto">
             <DialogHeader>
@@ -434,7 +468,6 @@ export default function HomePage() {
           </DialogContent>
         </Dialog>
 
-        {/* Delete Confirmation Dialog */}
         <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
           <DialogContent className="w-[90vw] max-w-md">
             <DialogHeader>
@@ -443,7 +476,7 @@ export default function HomePage() {
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-gray-600 mb-2">
-                  Вы уверены, что хотите удалить поездку <strong>"{tripToDelete?.name}"</strong>?
+                  Вы уверены, что хотите удалить поездку <strong>{tripToDelete?.name}</strong>?
                 </p>
                 <p className="text-sm text-red-600 font-medium">
                   Это действие удалит все расходы и данные поездки. Отменить это действие нельзя.

@@ -13,13 +13,14 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, participants } = await request.json()
+    const { name, participants: participantObjects, pin } = await request.json() // participants теперь participantObjects
 
-    if (!name || !participants || !Array.isArray(participants)) {
-      return NextResponse.json({ error: "Name and participants array are required" }, { status: 400 })
+    if (!name || !participantObjects || !Array.isArray(participantObjects)) {
+      return NextResponse.json({ error: "Name and participants array (of objects) are required" }, { status: 400 })
     }
+    // Дополнительная валидация, что каждый элемент participantObjects имеет id и name, если нужно
 
-    const trip = await createTrip(name, participants)
+    const trip = await createTrip(name, participantObjects, pin) // Передаем participantObjects
     return NextResponse.json(trip, { status: 201 })
   } catch (error) {
     console.error("Error in POST /api/trips:", error)
