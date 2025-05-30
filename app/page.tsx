@@ -2,23 +2,22 @@
 
 import type React from "react"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Users, Calendar, Trash2, X, Edit, Lock } from "lucide-react" // Added Lock
+import { Plus, Users, Calendar, Trash2, X, Edit, Lock } from "lucide-react"
 import Link from "next/link"
-import type { Participant as ParticipantType } from "@/lib/types"
-import { getUnlockedTrips } from "@/lib/pin-utils" // Import for checking unlocked trips
+
+const unlockedTripIds = [] // Declare the variable here
 
 interface Trip {
   id: string
   name: string
-  participants: ParticipantType[]
+  participants: string[]
   createdAt: string
-  pinHash?: string
 }
 
 interface Participant {
@@ -43,26 +42,22 @@ export default function HomePage() {
   const [editTripName, setEditTripName] = useState("")
   const [editParticipants, setEditParticipants] = useState<Participant[]>([])
 
-  const [newTripPin, setNewTripPin] = useState("")
-  const [unlockedTripIds, setUnlockedTripIds] = useState<string[]>([])
-
   useEffect(() => {
     fetchTrips()
-    setUnlockedTripIds(getUnlockedTrips())
   }, [])
 
   const fetchTrips = async () => {
     try {
       const response = await fetch("/api/trips")
       const data = await response.json()
-      setTrips(data as Trip[])
+      setTrips(data)
     } catch (error) {
       console.error("Ошибка при загрузке поездок:", error)
     }
   }
 
   const addParticipant = () => {
-    const newId = crypto.randomUUID() // Use crypto.randomUUID for unique IDs
+    const newId = (participants.length + 1).toString()
     setParticipants([...participants, { id: newId, name: "" }])
   }
 
@@ -76,19 +71,15 @@ export default function HomePage() {
     setParticipants(participants.map((p) => (p.id === id ? { ...p, name } : p)))
   }
 
-  const isCreateTripDisabled = useMemo(() => {
-    const hasName = newTripName.trim().length > 0
-    const hasParticipants = participants.some((p) => p.name.trim().length > 0)
-    const isPinValid = newTripPin.trim().length === 0 || newTripPin.trim().length === 4
-    return !hasName || !hasParticipants || !isPinValid
-  }, [newTripName, participants, newTripPin])
-
   const createTrip = async () => {
-    if (isCreateTripDisabled) return // Already checked by button's disabled state
+    if (!newTripName.trim()) return
 
-    const participantObjects: ParticipantType[] = participants
-      .filter((p) => p.name.trim().length > 0)
-      .map((p) => ({ id: p.id, name: p.name.trim() }))
+    const participantNames = participants.map((p) => p.name.trim()).filter((name) => name.length > 0)
+
+    if (participantNames.length === 0) {
+      alert("Добавьте хотя бы одного участника")
+      return
+    }
 
     try {
       const response = await fetch("/api/trips", {
@@ -96,32 +87,26 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newTripName,
-          participants: participantObjects,
-          pin: newTripPin.trim() || undefined,
+          participants: participantNames,
         }),
       })
 
       if (response.ok) {
         setNewTripName("")
-        setNewTripPin("")
         setParticipants([
           { id: "1", name: "" },
           { id: "2", name: "" },
         ])
         setIsCreateDialogOpen(false)
         fetchTrips()
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        alert(`Ошибка создания поездки: ${errorData.error || response.statusText}`)
       }
     } catch (error) {
       console.error("Ошибка при создании поездки:", error)
-      alert("Произошла ошибка при создании поездки.")
     }
   }
 
   const confirmDeleteTrip = (trip: Trip, event: React.MouseEvent) => {
-    event.preventDefault()
+    event.preventDefault() // Prevent navigation
     event.stopPropagation()
     setTripToDelete(trip)
     setIsDeleteConfirmOpen(true)
@@ -149,16 +134,16 @@ export default function HomePage() {
     setEditingTrip(trip)
     setEditTripName(trip.name)
     setEditParticipants(
-      trip.participants.map((p) => ({
-        id: p.id,
-        name: p.name,
+      trip.participants.map((name, index) => ({
+        id: index.toString(),
+        name,
       })),
     )
     setIsEditTripOpen(true)
   }
 
   const addEditParticipant = () => {
-    const newId = crypto.randomUUID()
+    const newId = (editParticipants.length + 1).toString()
     setEditParticipants([...editParticipants, { id: newId, name: "" }])
   }
 
@@ -173,13 +158,11 @@ export default function HomePage() {
   }
 
   const saveEditTrip = async () => {
-    if (!editTripName.trim() || !editingTrip) return
+    if (!editTripName.trim()) return
 
-    const processedParticipants: ParticipantType[] = editParticipants
-      .map((p) => ({ id: p.id, name: p.name.trim() }))
-      .filter((p) => p.name.length > 0)
+    const participantNames = editParticipants.map((p) => p.name.trim()).filter((name) => name.length > 0)
 
-    if (processedParticipants.length === 0) {
+    if (participantNames.length === 0) {
       alert("Добавьте хотя бы одного участника")
       return
     }
@@ -190,7 +173,7 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editTripName,
-          participants: processedParticipants,
+          participants: participantNames,
         }),
       })
 
@@ -198,13 +181,9 @@ export default function HomePage() {
         setIsEditTripOpen(false)
         setEditingTrip(null)
         fetchTrips()
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        alert(`Ошибка обновления: ${errorData.error || response.statusText}`)
       }
     } catch (error) {
       console.error("Ошибка при обновлении поездки:", error)
-      alert("Произошла ошибка при обновлении поездки.")
     }
   }
 
@@ -236,30 +215,6 @@ export default function HomePage() {
                     placeholder="Например: Отпуск в Сочи"
                     className="mt-2"
                   />
-                </div>
-
-                <div>
-                  <Label htmlFor="tripPin" className="text-base font-medium">
-                    PIN-код (опционально)
-                  </Label>
-                  <Input
-                    id="tripPin"
-                    type="password"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={4}
-                    value={newTripPin}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "")
-                      setNewTripPin(value)
-                    }}
-                    placeholder="4 цифры для защиты поездки"
-                    className="mt-2"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Если указан, PIN-код будет запрашиваться при каждом доступе к поездке. Оставьте пустым, если PIN не
-                    нужен.
-                  </p>
                 </div>
 
                 <div>
@@ -298,7 +253,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="flex space-x-2 pt-4">
-                  <Button onClick={createTrip} className="flex-1" disabled={isCreateTripDisabled}>
+                  <Button onClick={createTrip} className="flex-1">
                     Создать поездку
                   </Button>
                   <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} className="flex-1">
@@ -339,12 +294,7 @@ export default function HomePage() {
                             </div>
                             <div className="flex items-center text-sm text-gray-600 mb-2">
                               <Users className="w-4 h-4 mr-1" />
-                              {trip.participants.length}{" "}
-                              {trip.participants.length === 1
-                                ? "участник"
-                                : trip.participants.length > 1 && trip.participants.length < 5
-                                  ? "участника"
-                                  : "участников"}
+                              {trip.participants.length} участников
                             </div>
                           </div>
                           <Button
