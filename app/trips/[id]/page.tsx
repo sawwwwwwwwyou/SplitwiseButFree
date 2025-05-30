@@ -1736,5 +1736,5 @@ export default function TripPage() {
         </Dialog>
       </div>
     </div>
-  )\
+  )
 }
